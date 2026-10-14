@@ -1,0 +1,32 @@
+[Unit]
+Description=RustDesk personal account API
+After=network.target
+
+[Service]
+User=rustdesk-account
+Group=rustdesk-account
+ExecStart=/opt/rustdesk-account-server/bin/rustdesk-account-server --config /etc/rustdesk-account/account.toml serve
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/rustdesk-account
+MemoryMax=128M
+TasksMax=32
+LimitNOFILE=4096
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,15 @@
+/target/
+/data/
+/secrets/
+/dist/
+/test-results/
+/account.toml
+*.sqlite3*
+*.key
+*.lockfile
+__pycache__/
+/deploy/data/
+/deploy/secrets/
+/deploy/caddy-data/
+/deploy/caddy-config/
+/deploy/.env

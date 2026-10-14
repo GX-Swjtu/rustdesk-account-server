@@ -1,0 +1,14 @@
+target
+dist
+.git
+data
+secrets
+test-results
+account.toml
+deploy/data
+deploy/secrets
+deploy/caddy-data
+deploy/caddy-config
+deploy/.env
+*.sqlite3*
+*.key

@@ -1,0 +1,5 @@
+listen = "0.0.0.0:21114"
+database = "/data/accounts.sqlite3"
+master_key = "/secrets/master.key"
+# Exactly the Caddy container on the private network, not arbitrary clients.
+trusted_proxies = ["172.30.45.2/32"]

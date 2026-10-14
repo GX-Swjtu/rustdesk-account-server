@@ -1,0 +1,40 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+	http_port 8080
+	https_port 8443
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 20s
+			write 30s
+			idle 2m
+		}
+		max_header_size 16KB
+	}
+}
+
+{$ACCOUNT_DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	@api path /api/* /healthz
+	handle @api {
+		reverse_proxy account:21114 {
+			header_up -Forwarded
+			# Replace incoming headers: only the socket peer is the client here.
+			header_up X-Forwarded-For {remote_host}
+			transport http {
+				response_header_timeout 25s
+			}
+		}
+	}
+	handle {
+		respond "Not found" 404
+	}
+	# Access logging is deliberately disabled; application bodies and credentials
+	# must not be added to any future log configuration.
+}

@@ -1,0 +1,41 @@
+{
+	admin off
+	default_sni {$ACCOUNT_ADDRESS}
+	servers {
+		protocols h1 h2
+		timeouts {
+			read_header 10s
+			read_body 20s
+			write 30s
+			idle 2m
+		}
+		max_header_size 16KB
+	}
+}
+
+{$ACCOUNT_ADDRESS} {
+	tls {
+		issuer acme https://acme-v02.api.letsencrypt.org/directory {
+			profile shortlived
+		}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	@api path /api/* /healthz
+	handle @api {
+		reverse_proxy 127.0.0.1:21114 {
+			header_up -Forwarded
+			header_up X-Forwarded-For {remote_host}
+			transport http {
+				response_header_timeout 25s
+			}
+		}
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
+

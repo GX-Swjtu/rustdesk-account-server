@@ -1,0 +1,63 @@
+name: rustdesk-account
+services:
+  account:
+    build:
+      context: ..
+    image: rustdesk-account-server:0.1.0
+    user: "10001:10001"
+    command: ["--config", "/etc/account/account.toml", "serve"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 128m
+    cpus: 1.0
+    volumes:
+      - ./account.toml:/etc/account/account.toml:ro
+      - ./data:/data:rw
+      - ./secrets:/secrets:ro
+    tmpfs:
+      - /tmp:size=4m,mode=1777
+    networks:
+      backend:
+        ipv4_address: 172.30.45.3
+    # No host ports. Only Caddy can reach this container through backend.
+    logging:
+      driver: json-file
+      options: {max-size: "2m", max-file: "2"}
+  caddy:
+    image: caddy:2.11.7-alpine
+    user: "10001:10001"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    environment:
+      ACCOUNT_DOMAIN: ${ACCOUNT_DOMAIN:?Set ACCOUNT_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data:rw
+      - ./caddy-config:/config:rw
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    networks:
+      backend:
+        ipv4_address: 172.30.45.2
+      ingress: {}
+    depends_on: [account]
+    logging:
+      driver: json-file
+      options: {max-size: "2m", max-file: "2"}
+networks:
+  backend:
+    internal: true
+    ipam:
+      config: [{subnet: "172.30.45.0/24"}]
+  ingress: {}

@@ -1,0 +1,23 @@
+# Paths resolve relative to this configuration file. No account secrets belong here.
+listen = "127.0.0.1:21114"
+database = "data/accounts.sqlite3"
+master_key = "secrets/master.key"
+trusted_proxies = []
+max_accounts = 10
+max_devices = 100
+max_books = 30
+max_peers_per_book = 1000
+max_tags_per_book = 100
+max_sessions_per_user = 100
+max_request_bytes = 65536
+max_concurrent_requests = 32
+max_pending_database_jobs = 32
+password_workers = 1
+login_per_ip_per_minute = 12
+login_per_account_per_minute = 8
+login_global_per_minute = 30
+requests_per_ip_per_minute = 600
+limiter_capacity = 4096
+log_retention_days = 30
+max_audit_rows = 20000
+max_client_report_rows = 20000

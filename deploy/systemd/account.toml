@@ -1,0 +1,5 @@
+listen = "127.0.0.1:21114"
+database = "/var/lib/rustdesk-account/accounts.sqlite3"
+master_key = "/etc/rustdesk-account/secrets/master.key"
+trusted_proxies = ["127.0.0.1/32"]
+
