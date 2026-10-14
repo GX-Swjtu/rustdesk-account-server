@@ -1146,3 +1146,119 @@ async fn native_connection_report_preserves_bounded_peer_tuple_not_raw_credentia
         })
         .unwrap();
 }
+
+#[tokio::test]
+async fn slow_bodies_are_limited_per_source_and_release_permits() {
+    use tokio::{
+        net::TcpStream,
+        time::{Duration, timeout},
+    };
+
+    let f = Fixture::configured(|c| {
+        c.max_concurrent_requests = 2;
+        c.max_concurrent_requests_per_ip = 1;
+        c.trusted_proxies = vec!["127.0.0.1/32".into()];
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let router = f.router.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+    let slow = TcpStream::connect(addr).await.unwrap();
+    let partial = b"POST /api/login HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\nX-Forwarded-For: 203.0.113.10\r\n\r\n{";
+    slow.writable().await.unwrap();
+    assert_eq!(slow.try_write(partial).unwrap(), partial.len());
+    // Wait until the slow request occupies its source's only permit.
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if f.raw("GET", "/healthz", None, "", &[]).await.0 == 429 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let response = f
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/healthz")
+                .extension(ConnectInfo(
+                    "203.0.113.11:4567".parse::<SocketAddr>().unwrap(),
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    // A source outside trusted_proxies cannot change its concurrency bucket with XFF.
+    assert_eq!(
+        f.raw(
+            "GET",
+            "/healthz",
+            None,
+            "",
+            &[("x-forwarded-for", "203.0.113.12")]
+        )
+        .await
+        .0,
+        429
+    );
+    drop(slow);
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if f.raw("GET", "/healthz", None, "", &[]).await.0 == 200 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    server.abort();
+    let _ = server.await;
+}
+
+#[tokio::test]
+async fn shared_book_create_and_rename_reject_native_profile_names() {
+    let f = Fixture::new();
+    let book = admin::create_book(&f.store, "Family", "alice").unwrap();
+    for name in ["My address book", "Legacy address book"] {
+        assert!(admin::create_book(&f.store, name, "alice").is_err());
+        assert!(
+            admin::books(
+                &f.store,
+                admin::BookCommand::Rename {
+                    book: book.clone(),
+                    name: name.into()
+                }
+            )
+            .is_err()
+        );
+    }
+    admin::books(
+        &f.store,
+        admin::BookCommand::Rename {
+            book: book.clone(),
+            name: "Home".into(),
+        },
+    )
+    .unwrap();
+    let token = f.login("alice", "a", "ua").await;
+    let (status, profiles) = f
+        .call("POST", "/api/ab/shared/profiles", Some(&token), Value::Null)
+        .await;
+    assert_eq!(status, 200);
+    assert_eq!(profiles["data"].as_array().unwrap().len(), 1);
+    assert_eq!(profiles["data"][0]["name"], "Home");
+    assert_eq!(profiles["data"][0]["guid"], book);
+}

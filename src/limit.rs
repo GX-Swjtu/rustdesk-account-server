@@ -7,6 +7,46 @@ use std::{
     time::{Duration, Instant},
 };
 
+// Acquire only while holding a global request permit, bounding the number of IP entries.
+// The borrowed permit removes idle entries, including on body timeout or cancellation.
+pub(crate) struct IpConcurrency {
+    active: Mutex<HashMap<IpAddr, usize>>,
+    max: usize,
+}
+pub(crate) struct IpPermit<'a> {
+    limiter: &'a IpConcurrency,
+    ip: IpAddr,
+}
+impl IpConcurrency {
+    pub(crate) fn new(max: usize) -> Self {
+        Self {
+            active: Mutex::new(HashMap::new()),
+            max,
+        }
+    }
+    pub(crate) fn acquire(&self, ip: IpAddr) -> Option<IpPermit<'_>> {
+        let mut active = self.active.lock().ok()?;
+        let count = active.entry(ip).or_default();
+        if *count >= self.max {
+            return None;
+        }
+        *count += 1;
+        Some(IpPermit { limiter: self, ip })
+    }
+}
+impl Drop for IpPermit<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.limiter.active.lock()
+            && let Some(count) = active.get_mut(&self.ip)
+        {
+            *count -= 1;
+            if *count == 0 {
+                active.remove(&self.ip);
+            }
+        }
+    }
+}
+
 // All keys (including absent usernames) share a hard memory bound. A full table fails closed.
 pub struct Limiter {
     buckets: Mutex<HashMap<String, (Instant, usize)>>,

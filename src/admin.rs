@@ -204,10 +204,19 @@ pub fn set_disabled(store: &Store, username: &str, disabled: bool) -> Result<()>
     })
 }
 
-pub fn create_book(store: &Store, name: &str, owner: &str) -> Result<String> {
+fn validate_book_name(name: &str) -> Result<()> {
     if name.trim().is_empty() || !bounded(name, 128) {
         return Err(error::bad("Invalid book name"));
     }
+    // Native clients merge profiles by name, including their built-in personal profiles.
+    if matches!(name.trim(), "My address book" | "Legacy address book") {
+        return Err(error::bad("Book name is reserved by the RustDesk client"));
+    }
+    Ok(())
+}
+
+pub fn create_book(store: &Store, name: &str, owner: &str) -> Result<String> {
+    validate_book_name(name)?;
     store.with(|c, _, config| {
         let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let owner = user_id(&tx, owner)?;
@@ -411,7 +420,7 @@ pub fn books(store: &Store, command: BookCommand) -> Result<()> {
             book_password(store,&book,&value)
         }
         BookCommand::Rename{book,name} => store.with(|c,_,config| {
-            if name.trim().is_empty() || !bounded(&name,128) { return Err(error::bad("Invalid book name")); }
+            validate_book_name(&name)?;
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?; shared_exists(&tx,&book)?;
             tx.execute("UPDATE books SET name=?1 WHERE id=?2",params![name,book])?;
             audit(&tx,config,"local-admin","book.rename",&book)?; tx.commit()?; Ok(())

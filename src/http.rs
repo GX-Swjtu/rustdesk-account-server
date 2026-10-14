@@ -6,7 +6,7 @@ use crate::{
     crypto,
     db::Store,
     error::{self, ApiError},
-    limit::{Limiter, client_ip},
+    limit::{IpConcurrency, Limiter, client_ip},
 };
 use anyhow::Result;
 use axum::{
@@ -35,6 +35,7 @@ pub struct App {
     limiter: Arc<Limiter>,
     password_workers: Arc<Semaphore>,
     requests: Arc<Semaphore>,
+    requests_per_ip: Arc<IpConcurrency>,
     trusted: Arc<Vec<IpNet>>,
     dummy_hash: Arc<String>,
 }
@@ -55,6 +56,7 @@ impl App {
             limiter: Arc::new(Limiter::new(config.limiter_capacity)),
             password_workers: Arc::new(Semaphore::new(config.password_workers)),
             requests: Arc::new(Semaphore::new(config.max_concurrent_requests)),
+            requests_per_ip: Arc::new(IpConcurrency::new(config.max_concurrent_requests_per_ip)),
             trusted: Arc::new(
                 config
                     .trusted_proxies
@@ -109,6 +111,9 @@ async fn guard(State(app): State<App>, mut request: Request, next: Next) -> Resp
         .map(|c| c.0.ip())
         .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
     let ip = client_ip(remote, request.headers(), &app.trusted);
+    let Some(_ip_permit) = app.requests_per_ip.acquire(ip) else {
+        return ApiError(error::busy()).into_response();
+    };
     if !app.limiter.allow(&[(
         format!("requests/{ip}"),
         app.store.config.requests_per_ip_per_minute,
