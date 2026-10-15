@@ -1,5 +1,9 @@
 # 账号服务 CI 与发布
 
+客户端联合发布直接编译锁定的本仓库提交，不要求这里先发布 Release，也不会替本仓库创建 tag 或 Release。需要单独验证时，在 Actions 运行 **Account server build (artifacts only)**；只生成五个平台和容器的构建附件。需要独立发布时继续使用下述 `v...` tag 流程；两种入口复用 `.github/workflows/build.yml`，都不会自动部署。也可以完全不运行独立构建/发布，只使用客户端仓库的联合 Release。
+
+也可推送专用分支启动只构建流程：`git push origin HEAD:refs/heads/build/account/check-001`。这种方式不要求默认分支先存在手动工作流，不创建 tag 或 Release。
+
 代码仓库：`GX-Swjtu/rustdesk-account-server`。账号服务独立于客户端版本发布，使用 `v0.1.0` 一类 tag，与 Cargo.toml 一致。
 
 提交 main 或创建 PR 后运行格式检查、完整 Rust 测试、Clippy 和 Docker 构建检查。手动推送 `v*` tag 后，构建 Linux x64/ARM64、Windows x64、macOS Intel/Apple Silicon 原生包及 Linux x64 容器导出包。全部通过后生成带中英文防诈骗提醒和 SHA256SUMS 的 Release 草稿；维护者审核后手动发布。

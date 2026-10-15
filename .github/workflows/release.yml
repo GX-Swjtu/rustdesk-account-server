@@ -23,61 +23,13 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p test_release.py
           python3 scripts/release.py validate
-  binaries:
+  build:
     needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {os: ubuntu-24.04, target: x86_64-unknown-linux-gnu}
-          - {os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu}
-          - {os: windows-2022, target: x86_64-pc-windows-msvc}
-          - {os: macos-15, target: aarch64-apple-darwin}
-          - {os: macos-15-intel, target: x86_64-apple-darwin}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: '1.98.1'
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - run: cargo test --locked
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo build --release --locked
-      - name: Package binary, license and deployment examples
-        env:
-          RELEASE_TARGET: ${{ matrix.target }}
-        run: python scripts/release.py package
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: account-${{ matrix.target }}
-          path: dist/release/*
-          if-no-files-found: error
-  container:
-    needs: validate
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - name: Build and check deployment image
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          docker build --target final -t "rustdesk-account-server:${RELEASE_TAG#v}" .
-          docker run --rm "rustdesk-account-server:${RELEASE_TAG#v}" --help
-          mkdir -p dist/release
-          docker save "rustdesk-account-server:${RELEASE_TAG#v}" | gzip > "dist/release/rustdesk-account-server-${RELEASE_TAG#v}-docker-linux-x86_64.tar.gz"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: account-container
-          path: dist/release/*
-          if-no-files-found: error
+    uses: ./.github/workflows/build.yml
+    with:
+      source-ref: ${{ github.sha }}
   draft:
-    needs: [binaries, container]
+    needs: build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

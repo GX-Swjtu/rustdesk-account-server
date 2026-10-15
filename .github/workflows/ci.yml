@@ -21,5 +21,6 @@ jobs:
       - run: cargo test --locked
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: python3 -m unittest discover -s scripts -p test_release.py
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck='' .github/workflows/ci.yml .github/workflows/build.yml .github/workflows/release.yml
       - run: docker build --target final -t account-server:ci .
       - run: docker run --rm account-server:ci --help
