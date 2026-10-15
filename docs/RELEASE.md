@@ -6,6 +6,23 @@
 
 原生包包含二进制、许可证、说明和 Git 中的部署示例。Linux 原生包在 Ubuntu 24.04 构建，较旧主机请使用容器包。容器包可以用 `docker load` 导入，不需要额外容器仓库凭据。
 
+发行包内的 `deploy/compose.yaml` 在打包时写入本次镜像版本，并移除源码构建配置；账号服务设为 `pull_policy: never`，只使用已导入的本地镜像。源码仓库的 Compose 仍用于本地构建，两种配置不要混用。
+
+在 Linux x86_64 主机使用预构建容器时，同时下载同一 Release 的 Linux x86_64 原生包（取得部署示例）和容器归档。核对 `SHA256SUMS` 后执行，版本号替换为所下载的版本：
+
+```sh
+version=0.1.1
+mkdir account-release
+tar -xzf "rustdesk-account-server-${version}-x86_64-unknown-linux-gnu.tar.gz" -C account-release
+docker load -i "rustdesk-account-server-${version}-docker-linux-x86_64.tar.gz"
+cd account-release/deploy
+cp .env.example .env
+# 编辑 .env 的 ACCOUNT_DOMAIN 和 ACME_EMAIL。
+docker compose config --images
+```
+
+确认输出包含 `rustdesk-account-server:<本次版本>` 后，按 [部署文档](DEPLOYMENT.md) 创建目录、初始化新数据库和账号并启动服务，**跳过 `docker compose build account`**。已有部署升级时先备份数据库和主密钥，再导入新镜像、修改现有 Compose 的账号服务镜像版本并重建该服务；不要重新执行 `init` 或覆盖现有配置、数据目录。这里的容器归档仅支持 Linux x86_64，ARM64 主机使用对应原生包或自行从源码构建。
+
 发布脚本不读取、不打包本地数据库、主密钥、备份、真实 account.toml、deploy/.env 或测试结果。任何发布都不自动连接生产服务器，不重启服务，不迁移数据库。上线仍按 [部署文档](DEPLOYMENT.md) 先备份数据库和主密钥，再由管理员执行升级。
 
 账号登录后的远控仍需要支持账号加密握手的 hbbs；本仓库不把客户端 release 作为服务端部署触发器。原生客户端、hbbs/hbbr 和账号 API 的版本与生命周期分别管理。

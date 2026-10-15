@@ -20,7 +20,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: python3 scripts/release.py validate
+        run: |
+          python3 -m unittest discover -s scripts -p test_release.py
+          python3 scripts/release.py validate
   binaries:
     needs: validate
     strategy:

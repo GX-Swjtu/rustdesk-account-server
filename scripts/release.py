@@ -1,5 +1,6 @@
 """CI release packaging. Includes only source-controlled deployment examples."""
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -37,16 +38,31 @@ def package():
         files.append((ROOT / name, name))
     for name in subprocess.check_output(["git", "ls-files", "deploy"], cwd=ROOT, text=True).splitlines():
         files.append((ROOT / name, name))
+    compose = (ROOT / "deploy/compose.yaml").read_text(encoding="utf-8")
+    compose, build_count = re.subn(r"(?m)^    build:\n      context: \.\.\n", "", compose)
+    compose, image_count = re.subn(r"(?m)^    image: rustdesk-account-server:[^\n]+$",
+        f"    image: rustdesk-account-server:{VERSION}\n    pull_policy: never", compose)
+    if build_count != 1 or image_count != 1:
+        raise ValueError("Deployment template changed; cannot prepare the release image configuration")
+    compose = compose.encode("utf-8")
     DIST.mkdir(parents=True, exist_ok=True)
     stem = DIST / f"rustdesk-account-server-{VERSION}-{target}"
     if "windows" in target:
         with zipfile.ZipFile(str(stem) + ".zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for path, name in files:
-                archive.write(path, name)
+                if name == "deploy/compose.yaml":
+                    archive.writestr(name, compose)
+                else:
+                    archive.write(path, name)
     else:
         with tarfile.open(str(stem) + ".tar.gz", "w:gz") as archive:
             for path, name in files:
-                archive.add(path, arcname=name)
+                if name == "deploy/compose.yaml":
+                    info = archive.gettarinfo(path, arcname=name)
+                    info.size = len(compose)
+                    archive.addfile(info, io.BytesIO(compose))
+                else:
+                    archive.add(path, arcname=name)
 
 
 def draft():

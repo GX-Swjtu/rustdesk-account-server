@@ -50,6 +50,7 @@ cd /opt/rustdesk-account-server/deploy
 cp .env.example .env
 # 编辑 .env 的 ACCOUNT_DOMAIN 和 ACME_EMAIL；其中不需要密码或密钥。
 sudo install -d -m 0700 -o 10001 -g 10001 data secrets caddy-data caddy-config
+# 仅源码部署执行下一行；Release 发行包先按 RELEASE.md 导入配套镜像并跳过构建。
 docker compose build account
 docker compose config --quiet
 docker compose run --rm --no-deps \
